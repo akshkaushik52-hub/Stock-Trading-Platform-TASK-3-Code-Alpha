@@ -1,0 +1,349 @@
+// Source code is decompiled from a .class file using FernFlower decompiler (from Intellij IDEA).
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Scanner;
+
+public class TradingPlatform {
+   private static final Path PORTFOLIO_FILE = Paths.get("data", "portfolio.csv");
+   private static final Path TRANSACTION_FILE = Paths.get("data", "transactions.csv");
+   private final Scanner scanner;
+   private final HashMap<String, Stock> marketStocks;
+   private final ArrayList<Transaction> transactions;
+   private User user;
+   private int nextTransactionId;
+
+   public TradingPlatform() {
+      this.scanner = new Scanner(System.in);
+      this.marketStocks = new HashMap();
+      this.transactions = new ArrayList();
+      this.nextTransactionId = 1;
+      this.createPredefinedStocks();
+   }
+
+   public static void main(String[] var0) {
+      TradingPlatform var1 = new TradingPlatform();
+      var1.start();
+   }
+
+   public void start() {
+      System.out.println("==============================================");
+      System.out.println("       Welcome to Java Stock Trading App       ");
+      System.out.println("==============================================");
+      this.setupUser();
+      this.loadSavedData();
+      this.runMenu();
+      this.saveData();
+      System.out.println("Thank you for using the Stock Trading Platform.");
+   }
+
+   private void setupUser() {
+      while(this.user == null) {
+         System.out.print("Enter your username: ");
+         String var1 = this.scanner.nextLine();
+
+         try {
+            this.user = new User(var1);
+         } catch (IllegalArgumentException var3) {
+            System.out.println("Error: " + var3.getMessage());
+         }
+      }
+
+   }
+
+   private void createPredefinedStocks() {
+      this.addStock(new Stock("TCS", "Tata Consultancy", (double)3820.5F));
+      this.addStock(new Stock("INFY", "Infosys Ltd", (double)1465.25F));
+      this.addStock(new Stock("RELI", "Reliance Industries", (double)2910.75F));
+      this.addStock(new Stock("HDFC", "HDFC Bank", 1675.8));
+      this.addStock(new Stock("WIPRO", "Wipro Ltd", 510.4));
+      this.addStock(new Stock("SBIN", "State Bank of India", 780.3));
+   }
+
+   private void addStock(Stock var1) {
+      this.marketStocks.put(var1.getSymbol(), var1);
+   }
+
+   private void runMenu() {
+      boolean var1 = true;
+
+      while(var1) {
+         this.printMenu();
+         int var2 = this.readInt("Choose an option: ");
+         switch (var2) {
+            case 0:
+               var1 = false;
+               break;
+            case 1:
+               this.viewAvailableStocks();
+               break;
+            case 2:
+               this.buyStock();
+               break;
+            case 3:
+               this.sellStock();
+               break;
+            case 4:
+               this.viewPortfolioHoldings();
+               break;
+            case 5:
+               this.viewTransactionHistory();
+               break;
+            case 6:
+               this.generatePortfolioReport();
+               break;
+            case 7:
+               this.saveData();
+               System.out.println("Data saved successfully.");
+               break;
+            default:
+               System.out.println("Invalid option. Please choose a number from the menu.");
+         }
+      }
+
+   }
+
+   private void printMenu() {
+      System.out.println();
+      System.out.println("--------------- Main Menu ---------------");
+      System.out.println("1. View available stocks");
+      System.out.println("2. Buy stocks");
+      System.out.println("3. Sell stocks");
+      System.out.println("4. View portfolio holdings");
+      System.out.println("5. View transaction history");
+      System.out.println("6. Generate portfolio report");
+      System.out.println("7. Save data");
+      System.out.println("0. Exit");
+   }
+
+   private void viewAvailableStocks() {
+      System.out.println();
+      System.out.printf("%-8s %-24s %-12s%n", "Symbol", "Company", "Price");
+      System.out.println("------------------------------------------------");
+
+      for(MarketAsset var2 : this.marketStocks.values()) {
+         System.out.println(var2.getDisplayInfo());
+      }
+
+   }
+
+   private void buyStock() {
+      System.out.println();
+      this.viewAvailableStocks();
+      String var1 = this.readSymbol("Enter stock symbol to buy: ");
+      Stock var2 = (Stock)this.marketStocks.get(var1);
+      if (var2 == null) {
+         System.out.println("Stock symbol not found.");
+      } else {
+         int var3 = this.readInt("Enter quantity to buy: ");
+
+         try {
+            this.user.getPortfolio().buyStock(var2, var3);
+            Transaction var4 = new Transaction(this.nextTransactionId++, TransactionType.BUY, var1, var3, var2.getPrice(), LocalDateTime.now());
+            this.transactions.add(var4);
+            PrintStream var10000 = System.out;
+            String var10001 = this.formatMoney(var4.getTotalAmount());
+            var10000.println("Purchase successful. Total cost: Rs. " + var10001);
+         } catch (IllegalArgumentException var5) {
+            System.out.println("Buy failed: " + var5.getMessage());
+         }
+
+      }
+   }
+
+   private void sellStock() {
+      System.out.println();
+      this.user.getPortfolio().displayHoldings(this.marketStocks);
+      String var1 = this.readSymbol("Enter stock symbol to sell: ");
+      Stock var2 = (Stock)this.marketStocks.get(var1);
+      if (var2 == null) {
+         System.out.println("Stock symbol not found.");
+      } else {
+         int var3 = this.readInt("Enter quantity to sell: ");
+
+         try {
+            this.user.getPortfolio().sellStock(var2, var3);
+            Transaction var4 = new Transaction(this.nextTransactionId++, TransactionType.SELL, var1, var3, var2.getPrice(), LocalDateTime.now());
+            this.transactions.add(var4);
+            PrintStream var10000 = System.out;
+            String var10001 = this.formatMoney(var4.getTotalAmount());
+            var10000.println("Sale successful. Total received: Rs. " + var10001);
+         } catch (IllegalArgumentException var5) {
+            System.out.println("Sell failed: " + var5.getMessage());
+         }
+
+      }
+   }
+
+   private void viewPortfolioHoldings() {
+      System.out.println();
+      System.out.println("Portfolio holdings for " + this.user.getUsername() + ":");
+      this.user.getPortfolio().displayHoldings(this.marketStocks);
+   }
+
+   private void viewTransactionHistory() {
+      System.out.println();
+      if (this.transactions.isEmpty()) {
+         System.out.println("No transactions found.");
+      } else {
+         System.out.println("Transaction History:");
+
+         for(Transaction var2 : this.transactions) {
+            System.out.println(var2);
+         }
+
+      }
+   }
+
+   private void generatePortfolioReport() {
+      Portfolio var1 = this.user.getPortfolio();
+      double var2 = var1.calculateCurrentValue(this.marketStocks);
+      double var4 = var1.calculateTotalInvestedAmount();
+      double var6 = var1.calculateProfitLoss(this.marketStocks);
+      double var8 = var1.getAvailableBalance() + var2;
+      System.out.println();
+      System.out.println("================ Portfolio Report ================");
+      System.out.println("User: " + this.user.getUsername());
+      PrintStream var10000 = System.out;
+      String var10001 = this.formatMoney(var1.getAvailableBalance());
+      var10000.println("Available balance: Rs. " + var10001);
+      var10000 = System.out;
+      var10001 = this.formatMoney(var4);
+      var10000.println("Total invested amount: Rs. " + var10001);
+      var10000 = System.out;
+      var10001 = this.formatMoney(var2);
+      var10000.println("Current portfolio value: Rs. " + var10001);
+      var10000 = System.out;
+      var10001 = this.formatMoney(var6);
+      var10000.println("Profit/Loss: Rs. " + var10001);
+      var10000 = System.out;
+      var10001 = this.formatMoney(var8);
+      var10000.println("Total account value: Rs. " + var10001);
+      System.out.println();
+      System.out.println("Owned Stocks:");
+      var1.displayHoldings(this.marketStocks);
+      System.out.println("==================================================");
+   }
+
+   private void loadSavedData() {
+      try {
+         boolean var1 = Files.exists(PORTFOLIO_FILE, new LinkOption[0]);
+         boolean var2 = Files.exists(TRANSACTION_FILE, new LinkOption[0]);
+         this.user.getPortfolio().loadFromFile(PORTFOLIO_FILE);
+         this.loadTransactions();
+         if (!var1 && !var2) {
+            System.out.println("No saved data found. Starting with a fresh account.");
+         } else {
+            System.out.println("Saved portfolio and transactions loaded.");
+         }
+      } catch (IllegalArgumentException | IOException var3) {
+         System.out.println("Could not load saved data. Starting with a fresh account.");
+         System.out.println("Reason: " + ((Exception)var3).getMessage());
+      }
+
+   }
+
+   private void saveData() {
+      try {
+         this.user.getPortfolio().saveToFile(PORTFOLIO_FILE);
+         this.saveTransactions();
+      } catch (IOException var2) {
+         System.out.println("Could not save data: " + var2.getMessage());
+      }
+
+   }
+
+   private void loadTransactions() throws IOException {
+      this.transactions.clear();
+      if (Files.exists(TRANSACTION_FILE, new LinkOption[0])) {
+         BufferedReader var1 = Files.newBufferedReader(TRANSACTION_FILE);
+
+         try {
+            int var3 = 0;
+
+            String var2;
+            while((var2 = var1.readLine()) != null) {
+               if (!var2.trim().isEmpty()) {
+                  Transaction var4 = Transaction.fromCsv(var2);
+                  this.transactions.add(var4);
+                  var3 = Math.max(var3, var4.getId());
+               }
+            }
+
+            this.nextTransactionId = var3 + 1;
+         } catch (Throwable var6) {
+            if (var1 != null) {
+               try {
+                  var1.close();
+               } catch (Throwable var5) {
+                  var6.addSuppressed(var5);
+               }
+            }
+
+            throw var6;
+         }
+
+         if (var1 != null) {
+            var1.close();
+         }
+
+      }
+   }
+
+   private void saveTransactions() throws IOException {
+      Files.createDirectories(TRANSACTION_FILE.getParent());
+      BufferedWriter var1 = Files.newBufferedWriter(TRANSACTION_FILE);
+
+      try {
+         for(Transaction var3 : this.transactions) {
+            var1.write(var3.toCsv());
+            var1.newLine();
+         }
+      } catch (Throwable var5) {
+         if (var1 != null) {
+            try {
+               var1.close();
+            } catch (Throwable var4) {
+               var5.addSuppressed(var4);
+            }
+         }
+
+         throw var5;
+      }
+
+      if (var1 != null) {
+         var1.close();
+      }
+
+   }
+
+   private String readSymbol(String var1) {
+      System.out.print(var1);
+      return this.scanner.nextLine().trim().toUpperCase();
+   }
+
+   private int readInt(String var1) {
+      while(true) {
+         System.out.print(var1);
+         String var2 = this.scanner.nextLine();
+
+         try {
+            return Integer.parseInt(var2.trim());
+         } catch (NumberFormatException var4) {
+            System.out.println("Invalid number. Please enter a whole number.");
+         }
+      }
+   }
+
+   private String formatMoney(double var1) {
+      return String.format("%,.2f", var1);
+   }
+}
