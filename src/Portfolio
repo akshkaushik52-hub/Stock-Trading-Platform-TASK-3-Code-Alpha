@@ -1,0 +1,178 @@
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Portfolio {
+    private static final double DEFAULT_STARTING_BALANCE = 100000.00;
+
+    private double availableBalance;
+    private final HashMap<String, Integer> holdings;
+    private final HashMap<String, Double> investedAmountByStock;
+
+    public Portfolio() {
+        this.availableBalance = DEFAULT_STARTING_BALANCE;
+        this.holdings = new HashMap<>();
+        this.investedAmountByStock = new HashMap<>();
+    }
+
+    public double getAvailableBalance() {
+        return availableBalance;
+    }
+
+    public HashMap<String, Integer> getHoldings() {
+        return new HashMap<>(holdings);
+    }
+
+    public int getQuantity(String symbol) {
+        return holdings.getOrDefault(symbol.toUpperCase(), 0);
+    }
+
+    public double getInvestedAmount(String symbol) {
+        return investedAmountByStock.getOrDefault(symbol.toUpperCase(), 0.0);
+    }
+
+    public void buyStock(Stock stock, int quantity) {
+        validateQuantity(quantity);
+
+        double totalCost = stock.getPrice() * quantity;
+        if (totalCost > availableBalance) {
+            throw new IllegalArgumentException("Insufficient balance to complete this purchase.");
+        }
+
+        String symbol = stock.getSymbol();
+        availableBalance -= totalCost;
+        holdings.put(symbol, holdings.getOrDefault(symbol, 0) + quantity);
+        investedAmountByStock.put(symbol, investedAmountByStock.getOrDefault(symbol, 0.0) + totalCost);
+    }
+
+    public void sellStock(Stock stock, int quantity) {
+        validateQuantity(quantity);
+
+        String symbol = stock.getSymbol();
+        int ownedQuantity = holdings.getOrDefault(symbol, 0);
+        if (quantity > ownedQuantity) {
+            throw new IllegalArgumentException("You do not own enough shares to sell.");
+        }
+
+        double saleAmount = stock.getPrice() * quantity;
+        double currentInvestedAmount = investedAmountByStock.getOrDefault(symbol, 0.0);
+        double averageCost = currentInvestedAmount / ownedQuantity;
+        double costToRemove = averageCost * quantity;
+
+        availableBalance += saleAmount;
+
+        int remainingQuantity = ownedQuantity - quantity;
+        if (remainingQuantity == 0) {
+            holdings.remove(symbol);
+            investedAmountByStock.remove(symbol);
+        } else {
+            holdings.put(symbol, remainingQuantity);
+            investedAmountByStock.put(symbol, currentInvestedAmount - costToRemove);
+        }
+    }
+
+    public double calculateCurrentValue(HashMap<String, Stock> marketStocks) {
+        double value = 0.0;
+        for (Map.Entry<String, Integer> entry : holdings.entrySet()) {
+            Stock stock = marketStocks.get(entry.getKey());
+            if (stock != null) {
+                value += stock.getPrice() * entry.getValue();
+            }
+        }
+        return value;
+    }
+
+    public double calculateTotalInvestedAmount() {
+        double total = 0.0;
+        for (double amount : investedAmountByStock.values()) {
+            total += amount;
+        }
+        return total;
+    }
+
+    public double calculateProfitLoss(HashMap<String, Stock> marketStocks) {
+        return calculateCurrentValue(marketStocks) - calculateTotalInvestedAmount();
+    }
+
+    public void displayHoldings(HashMap<String, Stock> marketStocks) {
+        if (holdings.isEmpty()) {
+            System.out.println("No stocks currently owned.");
+            return;
+        }
+
+        System.out.printf("%-8s %-24s %-10s %-14s %-14s %-14s%n",
+                "Symbol", "Company", "Quantity", "Avg Cost", "Market Price", "P/L");
+        System.out.println("--------------------------------------------------------------------------------");
+
+        for (Map.Entry<String, Integer> entry : holdings.entrySet()) {
+            String symbol = entry.getKey();
+            int quantity = entry.getValue();
+            Stock stock = marketStocks.get(symbol);
+
+            if (stock == null) {
+                continue;
+            }
+
+            double investedAmount = investedAmountByStock.getOrDefault(symbol, 0.0);
+            double averageCost = investedAmount / quantity;
+            double currentValue = stock.getPrice() * quantity;
+            double profitLoss = currentValue - investedAmount;
+
+            System.out.printf("%-8s %-24s %-10d Rs. %-10.2f Rs. %-10.2f Rs. %-10.2f%n",
+                    symbol, stock.getName(), quantity, averageCost, stock.getPrice(), profitLoss);
+        }
+    }
+
+    public void saveToFile(Path filePath) throws IOException {
+        Files.createDirectories(filePath.getParent());
+
+        try (BufferedWriter writer = Files.newBufferedWriter(filePath)) {
+            writer.write("BALANCE," + availableBalance);
+            writer.newLine();
+
+            for (Map.Entry<String, Integer> entry : holdings.entrySet()) {
+                String symbol = entry.getKey();
+                int quantity = entry.getValue();
+                double investedAmount = investedAmountByStock.getOrDefault(symbol, 0.0);
+                writer.write("HOLDING," + symbol + "," + quantity + "," + investedAmount);
+                writer.newLine();
+            }
+        }
+    }
+
+    public void loadFromFile(Path filePath) throws IOException {
+        if (!Files.exists(filePath)) {
+            return;
+        }
+
+        holdings.clear();
+        investedAmountByStock.clear();
+
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+
+                if (parts.length == 2 && parts[0].equals("BALANCE")) {
+                    availableBalance = Double.parseDouble(parts[1]);
+                } else if (parts.length == 4 && parts[0].equals("HOLDING")) {
+                    String symbol = parts[1].toUpperCase();
+                    int quantity = Integer.parseInt(parts[2]);
+                    double investedAmount = Double.parseDouble(parts[3]);
+                    holdings.put(symbol, quantity);
+                    investedAmountByStock.put(symbol, investedAmount);
+                }
+            }
+        }
+    }
+
+    private void validateQuantity(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero.");
+        }
+    }
+}
