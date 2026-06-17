@@ -1,0 +1,25 @@
+// Source code is decompiled from a .class file using FernFlower decompiler (from Intellij IDEA).
+public class Stock extends MarketAsset {
+   private double price;
+
+   public Stock(String var1, String var2, double var3) {
+      super(var1, var2);
+      this.setPrice(var3);
+   }
+
+   public double getPrice() {
+      return this.price;
+   }
+
+   public void setPrice(double var1) {
+      if (var1 <= (double)0.0F) {
+         throw new IllegalArgumentException("Stock price must be greater than zero.");
+      } else {
+         this.price = var1;
+      }
+   }
+
+   public String getDisplayInfo() {
+      return String.format("%-8s %-24s Rs. %10.2f", this.getSymbol(), this.getName(), this.price);
+   }
+}
