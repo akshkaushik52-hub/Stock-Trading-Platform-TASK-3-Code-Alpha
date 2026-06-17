@@ -1,0 +1,24 @@
+public class Stock extends MarketAsset {
+    private double price;
+
+    public Stock(String symbol, String name, double price) {
+        super(symbol, name);
+        setPrice(price);
+    }
+
+    public double getPrice() {
+        return price;
+    }
+
+    public void setPrice(double price) {
+        if (price <= 0) {
+            throw new IllegalArgumentException("Stock price must be greater than zero.");
+        }
+        this.price = price;
+    }
+
+    @Override
+    public String getDisplayInfo() {
+        return String.format("%-8s %-24s Rs. %10.2f", getSymbol(), getName(), price);
+    }
+}
