@@ -1,0 +1,310 @@
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Scanner;
+
+public class TradingPlatform {
+    private static final Path PORTFOLIO_FILE = Paths.get("data", "portfolio.csv");
+    private static final Path TRANSACTION_FILE = Paths.get("data", "transactions.csv");
+
+    private final Scanner scanner;
+    private final HashMap<String, Stock> marketStocks;
+    private final ArrayList<Transaction> transactions;
+    private User user;
+    private int nextTransactionId;
+
+    public TradingPlatform() {
+        this.scanner = new Scanner(System.in);
+        this.marketStocks = new HashMap<>();
+        this.transactions = new ArrayList<>();
+        this.nextTransactionId = 1;
+        createPredefinedStocks();
+    }
+
+    public static void main(String[] args) {
+        TradingPlatform platform = new TradingPlatform();
+        platform.start();
+    }
+
+    public void start() {
+        System.out.println("==============================================");
+        System.out.println("       Welcome to Java Stock Trading App       ");
+        System.out.println("==============================================");
+
+        setupUser();
+        loadSavedData();
+        runMenu();
+        saveData();
+
+        System.out.println("Thank you for using the Stock Trading Platform.");
+    }
+
+    private void setupUser() {
+        while (user == null) {
+            System.out.print("Enter your username: ");
+            String username = scanner.nextLine();
+
+            try {
+                user = new User(username);
+            } catch (IllegalArgumentException exception) {
+                System.out.println("Error: " + exception.getMessage());
+            }
+        }
+    }
+
+    private void createPredefinedStocks() {
+        addStock(new Stock("TCS", "Tata Consultancy", 3820.50));
+        addStock(new Stock("INFY", "Infosys Ltd", 1465.25));
+        addStock(new Stock("RELI", "Reliance Industries", 2910.75));
+        addStock(new Stock("HDFC", "HDFC Bank", 1675.80));
+        addStock(new Stock("WIPRO", "Wipro Ltd", 510.40));
+        addStock(new Stock("SBIN", "State Bank of India", 780.30));
+    }
+
+    private void addStock(Stock stock) {
+        marketStocks.put(stock.getSymbol(), stock);
+    }
+
+    private void runMenu() {
+        boolean running = true;
+
+        while (running) {
+            printMenu();
+            int choice = readInt("Choose an option: ");
+
+            switch (choice) {
+                case 1:
+                    viewAvailableStocks();
+                    break;
+                case 2:
+                    buyStock();
+                    break;
+                case 3:
+                    sellStock();
+                    break;
+                case 4:
+                    viewPortfolioHoldings();
+                    break;
+                case 5:
+                    viewTransactionHistory();
+                    break;
+                case 6:
+                    generatePortfolioReport();
+                    break;
+                case 7:
+                    saveData();
+                    System.out.println("Data saved successfully.");
+                    break;
+                case 0:
+                    running = false;
+                    break;
+                default:
+                    System.out.println("Invalid option. Please choose a number from the menu.");
+            }
+        }
+    }
+
+    private void printMenu() {
+        System.out.println();
+        System.out.println("--------------- Main Menu ---------------");
+        System.out.println("1. View available stocks");
+        System.out.println("2. Buy stocks");
+        System.out.println("3. Sell stocks");
+        System.out.println("4. View portfolio holdings");
+        System.out.println("5. View transaction history");
+        System.out.println("6. Generate portfolio report");
+        System.out.println("7. Save data");
+        System.out.println("0. Exit");
+    }
+
+    private void viewAvailableStocks() {
+        System.out.println();
+        System.out.printf("%-8s %-24s %-12s%n", "Symbol", "Company", "Price");
+        System.out.println("------------------------------------------------");
+
+        // Polymorphism: each Stock is treated as a MarketAsset while displaying.
+        for (MarketAsset asset : marketStocks.values()) {
+            System.out.println(asset.getDisplayInfo());
+        }
+    }
+
+    private void buyStock() {
+        System.out.println();
+        viewAvailableStocks();
+
+        String symbol = readSymbol("Enter stock symbol to buy: ");
+        Stock stock = marketStocks.get(symbol);
+        if (stock == null) {
+            System.out.println("Stock symbol not found.");
+            return;
+        }
+
+        int quantity = readInt("Enter quantity to buy: ");
+
+        try {
+            user.getPortfolio().buyStock(stock, quantity);
+            Transaction transaction = new Transaction(nextTransactionId++, TransactionType.BUY, symbol, quantity,
+                    stock.getPrice(), LocalDateTime.now());
+            transactions.add(transaction);
+            System.out.println("Purchase successful. Total cost: Rs. " + formatMoney(transaction.getTotalAmount()));
+        } catch (IllegalArgumentException exception) {
+            System.out.println("Buy failed: " + exception.getMessage());
+        }
+    }
+
+    private void sellStock() {
+        System.out.println();
+        user.getPortfolio().displayHoldings(marketStocks);
+
+        String symbol = readSymbol("Enter stock symbol to sell: ");
+        Stock stock = marketStocks.get(symbol);
+        if (stock == null) {
+            System.out.println("Stock symbol not found.");
+            return;
+        }
+
+        int quantity = readInt("Enter quantity to sell: ");
+
+        try {
+            user.getPortfolio().sellStock(stock, quantity);
+            Transaction transaction = new Transaction(nextTransactionId++, TransactionType.SELL, symbol, quantity,
+                    stock.getPrice(), LocalDateTime.now());
+            transactions.add(transaction);
+            System.out.println("Sale successful. Total received: Rs. " + formatMoney(transaction.getTotalAmount()));
+        } catch (IllegalArgumentException exception) {
+            System.out.println("Sell failed: " + exception.getMessage());
+        }
+    }
+
+    private void viewPortfolioHoldings() {
+        System.out.println();
+        System.out.println("Portfolio holdings for " + user.getUsername() + ":");
+        user.getPortfolio().displayHoldings(marketStocks);
+    }
+
+    private void viewTransactionHistory() {
+        System.out.println();
+        if (transactions.isEmpty()) {
+            System.out.println("No transactions found.");
+            return;
+        }
+
+        System.out.println("Transaction History:");
+        for (Transaction transaction : transactions) {
+            System.out.println(transaction);
+        }
+    }
+
+    private void generatePortfolioReport() {
+        Portfolio portfolio = user.getPortfolio();
+        double stockValue = portfolio.calculateCurrentValue(marketStocks);
+        double investedAmount = portfolio.calculateTotalInvestedAmount();
+        double profitLoss = portfolio.calculateProfitLoss(marketStocks);
+        double totalAccountValue = portfolio.getAvailableBalance() + stockValue;
+
+        System.out.println();
+        System.out.println("================ Portfolio Report ================");
+        System.out.println("User: " + user.getUsername());
+        System.out.println("Available balance: Rs. " + formatMoney(portfolio.getAvailableBalance()));
+        System.out.println("Total invested amount: Rs. " + formatMoney(investedAmount));
+        System.out.println("Current portfolio value: Rs. " + formatMoney(stockValue));
+        System.out.println("Profit/Loss: Rs. " + formatMoney(profitLoss));
+        System.out.println("Total account value: Rs. " + formatMoney(totalAccountValue));
+        System.out.println();
+        System.out.println("Owned Stocks:");
+        portfolio.displayHoldings(marketStocks);
+        System.out.println("==================================================");
+    }
+
+    private void loadSavedData() {
+        try {
+            boolean savedPortfolioExists = Files.exists(PORTFOLIO_FILE);
+            boolean savedTransactionsExist = Files.exists(TRANSACTION_FILE);
+
+            user.getPortfolio().loadFromFile(PORTFOLIO_FILE);
+            loadTransactions();
+
+            if (savedPortfolioExists || savedTransactionsExist) {
+                System.out.println("Saved portfolio and transactions loaded.");
+            } else {
+                System.out.println("No saved data found. Starting with a fresh account.");
+            }
+        } catch (IOException | IllegalArgumentException exception) {
+            System.out.println("Could not load saved data. Starting with a fresh account.");
+            System.out.println("Reason: " + exception.getMessage());
+        }
+    }
+
+    private void saveData() {
+        try {
+            user.getPortfolio().saveToFile(PORTFOLIO_FILE);
+            saveTransactions();
+        } catch (IOException exception) {
+            System.out.println("Could not save data: " + exception.getMessage());
+        }
+    }
+
+    private void loadTransactions() throws IOException {
+        transactions.clear();
+
+        if (!Files.exists(TRANSACTION_FILE)) {
+            return;
+        }
+
+        try (BufferedReader reader = Files.newBufferedReader(TRANSACTION_FILE)) {
+            String line;
+            int maxId = 0;
+
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+
+                Transaction transaction = Transaction.fromCsv(line);
+                transactions.add(transaction);
+                maxId = Math.max(maxId, transaction.getId());
+            }
+
+            nextTransactionId = maxId + 1;
+        }
+    }
+
+    private void saveTransactions() throws IOException {
+        Files.createDirectories(TRANSACTION_FILE.getParent());
+
+        try (BufferedWriter writer = Files.newBufferedWriter(TRANSACTION_FILE)) {
+            for (Transaction transaction : transactions) {
+                writer.write(transaction.toCsv());
+                writer.newLine();
+            }
+        }
+    }
+
+    private String readSymbol(String prompt) {
+        System.out.print(prompt);
+        return scanner.nextLine().trim().toUpperCase();
+    }
+
+    private int readInt(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String input = scanner.nextLine();
+
+            try {
+                return Integer.parseInt(input.trim());
+            } catch (NumberFormatException exception) {
+                System.out.println("Invalid number. Please enter a whole number.");
+            }
+        }
+    }
+
+    private String formatMoney(double amount) {
+        return String.format("%,.2f", amount);
+    }
+}
