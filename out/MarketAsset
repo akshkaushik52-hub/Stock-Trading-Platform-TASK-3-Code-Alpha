@@ -1,0 +1,20 @@
+// Source code is decompiled from a .class file using FernFlower decompiler (from Intellij IDEA).
+public abstract class MarketAsset {
+   private final String symbol;
+   private final String name;
+
+   public MarketAsset(String var1, String var2) {
+      this.symbol = var1.toUpperCase();
+      this.name = var2;
+   }
+
+   public String getSymbol() {
+      return this.symbol;
+   }
+
+   public String getName() {
+      return this.name;
+   }
+
+   public abstract String getDisplayInfo();
+}
